@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#eeeeee">
+<title>汉字语义干扰实验</title>
+<style>
+  :root{color-scheme:light;--canvas:#eee;--ink:#1d1d1d;--quiet:#555;--rule:#aaa;--thin:#c9c9c9;font-family:Inter,"Microsoft YaHei","PingFang SC",sans-serif;color:var(--ink);background:var(--canvas);-webkit-tap-highlight-color:transparent}
+  *{box-sizing:border-box}body{margin:0;font-size:16px;line-height:1.6}button,input{font:inherit;color:inherit}input,button,a{accent-color:#252525}a{color:inherit;text-underline-offset:3px}a:hover{text-decoration-thickness:2px}::selection{background:#444;color:#fff}:focus-visible{outline:2px solid #333;outline-offset:4px}[hidden]{display:none!important}
+  .sheet{max-width:992px;margin:0 auto;padding:clamp(32px,7vh,80px) 40px 28px}.title{font-size:clamp(34px,4.6vw,58px);line-height:1.2;letter-spacing:-.05em;margin:0;font-weight:700}.mast{border-bottom:2px solid #333;padding-bottom:24px}.layout{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.92fr);gap:clamp(32px,7vw,88px);padding:32px 0}.layout h2,.report h2{font-weight:650;font-size:20px;margin:0 0 12px}.guide p{margin:0 0 12px}.quiet,.note{color:var(--quiet)}.note{font-size:14px;line-height:1.7}
+  .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin:22px 0}.key{border:1px solid #aaa;border-bottom:3px solid #999;border-radius:5px;padding:12px 12px 10px;background:#f4f4f4}.key strong{display:block;font:600 32px/1 Consolas,monospace;letter-spacing:-.05em;margin-bottom:8px}.key span,.key small{display:block}.key small{font-size:13px;color:var(--quiet)}
+  form{margin:0}.field{display:block;font-weight:600;font-size:14px}.field input{display:block;width:100%;border:1px solid #909090;border-radius:3px;background:#fafafa;padding:8px 10px;height:41px;margin-top:5px;font-weight:400}.pair{display:grid;grid-template-columns:1fr 1fr;align-items:start;gap:22px;margin-top:14px}fieldset{margin:0;padding:0;border:none}legend{padding:0;font-size:14px;font-weight:600}.radios{height:45px;display:flex;align-items:center;gap:18px}.radios label,.check{display:flex;align-items:center;gap:6px;cursor:pointer}.radios input,.check input{margin:0;width:16px;height:16px}.check{font-size:15px;border-top:1px solid var(--thin);padding-top:17px;margin:18px 0 14px}
+  .btn{background:var(--ink);color:#fff;border:1px solid var(--ink);border-radius:3px;cursor:pointer;padding:10px 22px;font-weight:650}.btn:hover{background:#393939}.alt{background:transparent;color:var(--ink);border-color:#888}.alt:hover{background:#ddd}.start{width:100%}.more{font-size:14px;border-top:1px solid var(--rule);padding:12px 0}.more summary{cursor:pointer;width:fit-content}.more p{max-width:74ch;margin:8px 0}.restore{overflow-wrap:anywhere;font-size:14px;border-top:1px solid var(--thin);padding:12px 0}.restore button{margin:6px 0}
+  .report{padding:22px 0}.idline{overflow-wrap:anywhere;color:var(--quiet);margin:8px 0 0;white-space:pre-wrap}.metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:0 0 26px}.metric{border-top:1px solid var(--rule);padding:10px 0}.metric span{display:block;color:var(--quiet);font-size:14px}.metric b{font:600 clamp(24px,4vw,38px)/1.5 Consolas,monospace}.metric small{font-size:13px;margin-left:5px;color:var(--quiet)}.scroll{overflow-x:auto}table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}th,td{border-bottom:1px solid var(--thin);text-align:right;padding:9px 5px;white-space:nowrap}th{font-size:14px}th:first-child,td:first-child{text-align:left}.actions{display:flex;gap:10px;flex-wrap:wrap}.alert{padding:8px 0;border-bottom:1px solid var(--rule);font-weight:600}
+  #stage{position:fixed;inset:0;background:#ccc;color:#000;display:grid;place-items:center;z-index:1;line-height:normal}.target{width:125px;height:84px;display:grid;place-items:center}.target span{display:grid;place-items:center;width:70px;height:60px;color:#000;background:#ccc;font:40px KaiTi,STKaiti,"Microsoft YaHei",serif}.dot{font:30px Arial}.stageMessage{text-align:center;color:#222;font-size:22px}.stageMessage small{display:block;font-size:15px;margin-top:12px}
+  @media(max-width:700px){.sheet{padding:28px 18px}.layout{grid-template-columns:1fr;gap:21px;padding:20px 0}.keys{margin:12px 0}.key{padding:8px 10px}.key strong{font-size:24px}.key span,.key small{display:inline-block;margin-right:7px}.mast{padding-bottom:15px}.metrics{gap:8px}.metric small{display:block;margin:0}th,td{font-size:12px}.pair{gap:14px}}
+  .options{display:flex;align-items:center;gap:12px 22px;flex-wrap:wrap;border-top:1px solid var(--thin);padding:15px 0;margin-top:17px}.options .check{border:0;margin:0;padding:0}.exerciseFlag{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:15px}.exerciseFlag input{appearance:none;display:grid;place-items:center;width:18px;height:18px;margin:0;border:1px solid #777;border-radius:3px;background:#fafafa}.exerciseFlag input:checked{background:#282828;border-color:#282828}.exerciseFlag input:checked::after{content:"";height:9px;width:4px;transform:translateY(-1px) rotate(45deg);border:solid white;border-width:0 2px 2px 0}.entries{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .survey{max-width:780px;margin:auto}.survey .title{font-size:clamp(28px,4vw,43px)}.survey h2{font-size:21px;margin:26px 0 8px}.survey .check{border:0;padding:0;margin:10px 0}.survey fieldset{margin:16px 0}.survey legend{font-size:16px;font-weight:600;padding:0 0 7px}.choices{display:flex;flex-wrap:wrap;gap:6px 15px}.choices.stack{display:grid;gap:4px}.choices label{display:flex;gap:8px;align-items:baseline;cursor:pointer}.survey input[type=radio]{margin:0;width:16px;height:16px;flex:none;align-self:center}.fitness{table-layout:fixed}.fitness th,.fitness td{text-align:center;white-space:normal;line-height:1.45;padding:8px 2px}.fitness th:first-child{width:36%;text-align:left}.fitness tbody th{font-weight:500}.fitness td label{display:grid;min-height:32px;place-items:center;cursor:pointer}.survey .actions{align-items:center;margin-top:20px}.survey .note{margin:4px 0 10px}.survey #savedNote{overflow-wrap:anywhere;margin-top:12px}
+</style>
+</head>
+<body>
+<main class="sheet">
+  <section id="home">
+    <header class="mast"><h1 class="title">汉字语义干扰实验</h1></header>
+    <div class="layout">
+      <section class="guide" aria-labelledby="keysTitle">
+        <h2 id="keysTitle">实验指导语</h2>
+        <p>请把右手食指、中指和无名指分别放在数字键 1、2、3 上。每道题只看外框的颜色，忽略中间的内容。看到绿色按 1，黄色按 2，蓝色按 3。请尽量又快又准地作答。</p>
+        <div class="keys">
+          <div class="key"><strong>1</strong><span>绿色</span><small>食指</small></div>
+          <div class="key"><strong>2</strong><span>黄色</span><small>中指</small></div>
+          <div class="key"><strong>3</strong><span>蓝色</span><small>无名指</small></div>
+        </div>
+        <p class="note">优先使用数字小键盘，也可以使用主键盘上方的数字键。正式测试共 108 题。</p>
+      </section>
+      <form id="settings">
+        <h2>测试登记</h2>
+        <label class="field">被试编号<input id="pid" type="text" required autocomplete="off" spellcheck="false"></label>
+        <div class="pair">
+          <fieldset><legend>性别</legend><div class="radios"><label><input type="radio" name="sex" value="male" required>男</label><label><input type="radio" name="sex" value="female">女</label></div></fieldset>
+          <label class="field">年龄（周岁）<input id="age" type="number" min="10" max="99" required></label>
+        </div>
+        <div class="options">
+          <label class="check"><input type="checkbox" id="practiceOpt" checked>先做 9 道练习题</label>
+          <label class="exerciseFlag"><input type="checkbox" id="postExercise">运动后</label>
+        </div>
+        <div class="entries"><button class="btn" type="submit" id="go">开始测试</button><button class="btn alt" type="button" id="openSurvey">填写问卷</button></div>
+      </form>
+    </div>
+    <div id="recovery" class="restore" hidden></div>
+  </section>
+  <section id="survey" class="survey" hidden>
+    <header class="mast"><h1 class="title">体育活动与自评体适能问卷</h1></header>
+    <form id="surveyForm">
+      <h2>过去一个月的体育锻炼</h2>
+      <p class="note">按你最常做的那类体育锻炼回答，每题选一项。</p>
+      <label class="check"><input type="checkbox" id="noExercise">过去一个月完全没有锻炼</label>
+      <div id="parsQuestions"></div>
+      <h2>目前的身体适能</h2>
+      <p>和同龄人相比，你觉得自己在以下各方面表现怎样？</p>
+      <table class="fitness" aria-label="目前的身体适能"><thead><tr><th scope="col">项目</th><th scope="col">很差</th><th scope="col">较差</th><th scope="col">一般</th><th scope="col">较好</th><th scope="col">很好</th></tr></thead><tbody id="fitnessRows"></tbody></table>
+      <div class="actions"><button type="submit" class="btn" id="saveSurvey">保存问卷 CSV</button><button type="button" class="btn alt" id="surveyBack">返回首页</button></div>
+      <p id="savedNote" class="note" role="status"></p>
+    </form>
+  </section>
+  <section id="result" hidden>
+    <header class="mast"><h1 id="resultHeading" class="title"></h1><p class="idline" id="resultMeta"></p></header>
+    <div id="report" class="report"></div>
+  </section>
+</main>
+<div id="stage" hidden><div id="fix" class="dot" hidden>•</div><div id="target" class="target" hidden><span id="glyph"></span></div><div id="stageMsg" class="stageMessage" hidden></div></div>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const C = ['绿','黄','蓝'], RGB = ['#00ff00','#f0f000','#000bff'];
+const associate = ['草','金','天'], neutral = ['贯','奖','炭'];
+const labels = {incongruent:'关联不一致',neutral:'中性词',congruent:'关联一致',practice:'练习'};
+
+const cacheKey = 'zh-semantic-stroop.last.v1';
+let run = null, receiver = null, generation = 0, live = false, monoZero = 0;
+let timerId = 0, frameId = 0, cacheOK = true;
+function stamp(){return new Date().toISOString()}
+function round(n){return Math.round(n*100)/100}
+function elapsed(){return round(performance.now()-monoZero)}
+function view(id){for(const name of ['home','survey','result','stage']) $(name).hidden = name!==id;
+  if(id!=='stage')window.scrollTo(0,0)}
+function randomSeed(){return crypto.getRandomValues(new Uint32Array(1))[0]}
+function rng(seed){return function(){seed=(seed+0x6D2B79F5)>>>0;let t=seed;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return ((t^(t>>>14))>>>0)/4294967296}}
+function shuffled(items,random){for(let i=items.length-1;i>0;i--){const j=Math.floor(random()*(i+1));[items[i],items[j]]=[items[j],items[i]]}return items}
+function formalList(seed){const random=rng(seed),list=[];for(let b=1;b<=4;b++){const block=[];
+  associate.forEach((word,i)=>C.forEach((color,j)=>{for(let k=0;k<2;k++)block.push({block:b,kind:i===j?'congruent':'incongruent',word,association:C[i],color,key:j+1})}));
+  neutral.forEach(word=>C.forEach((color,j)=>block.push({block:b,kind:'neutral',word,association:'',color,key:j+1})));
+  list.push(...shuffled(block,random))}return list}
+function practiceList(seed){const items=[];for(let k=0;k<3;k++)C.forEach((color,j)=>items.push({block:0,kind:'practice',word:'%',association:'',color,key:j+1}));return shuffled(items,rng(seed^0x12ab))}
+function storeRun(){if(!run)return;try{sessionStorage.setItem(cacheKey,JSON.stringify(run))}catch{cacheOK=false}}
+function later(ms,fn){const id=generation;timerId=setTimeout(()=>{if(live&&generation===id)fn()},ms)}
+function frame(fn){const id=generation;frameId=requestAnimationFrame(()=>{if(live&&generation===id)fn()})}
+function clearTimers(){generation++;clearTimeout(timerId);cancelAnimationFrame(frameId);receiver=null}
+function clearStage(){for(const x of ['fix','target','stageMsg'])$(x).hidden=true}
+function message(line,detail=''){clearStage();const box=$('stageMsg');box.replaceChildren(document.createTextNode(line));if(detail){const small=document.createElement('small');small.textContent=detail;box.append(small)}box.hidden=false}
+function start() {
+  if (live) return;
+  clearTimers();
+  monoZero = performance.now();
+  cacheOK = true;
+  const seed = randomSeed();
+  run = {
+    version: 'CN-SemStroop-1.3', run_id: Date.now().toString(36)+'-'+seed.toString(36), seed,
+    ...registration(),
+    practice_included: Number($('practiceOpt').checked), started_utc: stamp(), ended_utc: '',
+    status: 'running', stop_reason: '', phase: 'setup', formal_start_ms: '', formal_end_ms: '',
+    last_checkpoint_utc: stamp(), platform: navigator.userAgent, screen_px: screen.width+'x'+screen.height, rows: []
+  };
+  live = true;
+  if (run.practice_included) beginPhase('practice', practiceList(seed));
+  else beginPhase('formal', formalList(seed));
+}
+$('settings').addEventListener('submit', e => { e.preventDefault(); start(); });
+
+function beginPhase(phase,list){view('stage');run.phase=phase;storeRun();
+  message(phase==='formal'?'正式测试即将开始':'按键练习即将开始','1 绿　　2 黄　　3 蓝');
+  later(1500,()=>{if(phase==='formal')run.formal_start_ms=elapsed();trial(phase,list,0)})}
+function trial(phase,list,index){if(index===list.length){if(phase==='formal'){run.formal_end_ms=elapsed();finish('complete','')}else beginPhase('formal',formalList(run.seed));return}
+  const t=list[index];const showFix=()=>frame(()=>{clearStage();$('fix').hidden=false;
+    later(500,()=>{clearStage();later(300,()=>frame(()=>showStimulus(phase,list,index,t)))})});
+  if(phase==='formal'&&index>0&&list[index-1].block!==t.block){message('短暂休息','即将开始第 '+t.block+' / 4 组');later(3000,showFix)}else showFix()}
+function showStimulus(phase,list,index,t){const box=$('target');$('glyph').textContent=t.word;box.style.background=RGB[t.key-1];box.hidden=false;
+  const onset=performance.now();
+  const respond=(key,code,ts)=>{clearTimeout(timerId);receiver=null;const duration=performance.now()-onset;let rt=key?ts-onset:null;
+    if(rt!==null&&rt>3000){key=null;code='';rt=null}
+    const correct=key===t.key,valid=correct&&rt>=200&&rt<=1500;
+    const row={phase,trial:index+1,block:t.block,stimulus_type:t.kind,character:t.word,associated_color:t.association,target_color:t.color,correct_key:t.key,response_key:key??'',physical_key:code,correct:correct?1:0,timeout:key===null?1:0,rt_ms:rt===null?'':round(rt),rt_included:valid&&phase==='formal'?1:0,stimulus_onset_ms:round(onset-monoZero),response_handled_ms:round(duration)};
+    clearStage();if(phase==='practice')message(key===null?'超时':correct?'正确':'按键有误','色框为'+t.color+'，对应 '+t.key+' 键');
+    run.rows.push(row);run.last_checkpoint_utc=stamp();storeRun();later(1000,()=>trial(phase,list,index+1))};
+  receiver=(key,code,ts)=>{if(ts>=onset)respond(key,code,ts)};later(3000,()=>respond(null,'',0))}
+document.addEventListener('keydown',e=>{if(!live||e.repeat)return;if(e.code==='Escape'){e.preventDefault();finish('interrupted','escape');return}
+  if(!receiver||e.ctrlKey||e.altKey||e.metaKey||e.shiftKey)return;const match=/^(?:Digit|Numpad)([123])$/.exec(e.code);if(match){e.preventDefault();const now=performance.now();const ts=e.timeStamp>=0&&e.timeStamp<=now+1?e.timeStamp:now;receiver(Number(match[1]),e.code,ts)}});
+
+document.addEventListener('visibilitychange',()=>{if(document.hidden&&live)finish('interrupted','tab_hidden')});
+window.addEventListener('blur',()=>{if(live&&run.phase==='formal')finish('interrupted','window_blur')});
+window.addEventListener('pagehide',()=>{if(live){clearTimers();live=false;run.status='interrupted';run.stop_reason='page_exit';run.ended_utc=stamp();storeRun()}});
+function stats(rows){const n=rows.length,correct=rows.filter(r=>r.correct).length,valid=rows.filter(r=>r.rt_included);
+  const mean=valid.length?valid.reduce((s,r)=>s+r.rt_ms,0)/valid.length:null;
+  return {n,correct,acc:n?100*correct/n:null,rt:mean,valid:valid.length,timeouts:rows.filter(r=>r.timeout).length}}
+function summarize(session){const all=session.rows.filter(r=>r.phase==='formal'),groups={};for(const k of ['incongruent','neutral','congruent'])groups[k]=stats(all.filter(r=>r.stimulus_type===k));
+  const a=groups.incongruent,b=groups.neutral;return {groups,overall:stats(all),rtCost:a.rt===null||b.rt===null?null:a.rt-b.rt,accCost:a.acc===null||b.acc===null?null:b.acc-a.acc}}
+function scalar(n){return n===null?'':round(n)}
+function csvText(data) {
+  const cols = [...new Set(data.flatMap(Object.keys))];
+  const escapeCell = value => '"'+String(value ?? '').replaceAll('"','""')+'"';
+  return '\ufeff'+[cols,...data.map(row=>cols.map(k=>row[k]))].map(line=>line.map(escapeCell).join(',')).join('\r\n')+'\r\n';
+}
+function buildCSV(s){const {rows,...meta}=s;const metrics=summarize(s);const summary={};for(const [group,val] of Object.entries({all:metrics.overall,...metrics.groups})){for(const [field,v] of Object.entries(val))summary[group+'_'+field]=scalar(v)}
+  summary.semantic_cost_ms=scalar(metrics.rtCost);summary.accuracy_cost_pp=scalar(metrics.accCost);
+  const data=[...rows.map(row=>({row_type:'trial',...meta,...row})),{row_type:'summary',...meta,phase:'summary',...summary}];
+  return csvText(data)}
+function fileIdentifier(value) {
+  // Retain the exact identifier in the CSV, even when it cannot be used as a filename.
+  const clean = value.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_');
+  const encoder = new TextEncoder();
+  let prefix = '', bytes = 0;
+  for (const char of clean) {
+    bytes += encoder.encode(char).length;
+    if (bytes > 135) break;
+    prefix += char;
+  }
+  if (prefix === value) return prefix;
+  let hash = 2166136261;
+  for (const byte of encoder.encode(value)) hash = Math.imul(hash ^ byte, 16777619);
+  return prefix+'~'+(hash >>> 0).toString(16).padStart(8,'0');
+}
+function saveCsv(text, category, record) {
+  const blob = new Blob([text], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = [category, fileIdentifier(record.participant), record.post_exercise === 1 ? '运动后' : '',
+    record.run_id, record.status === 'interrupted' ? '中止' : ''].filter(Boolean).join('_')+'.csv';
+  document.body.append(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30000);
+}
+function download(s) { saveCsv(buildCSV(s), 'Stroop', s); }
+function finish(status,reason){if(!live)return;live=false;clearTimers();run.status=status;run.stop_reason=reason;run.ended_utc=stamp();storeRun();displayResult(run);if(status==='complete')download(run)}
+function format(n,unit=''){return n===null?'—':n.toFixed(1)+unit}
+function recovery(){let old;try{old=JSON.parse(sessionStorage.getItem(cacheKey))}catch{}const box=$('recovery');box.hidden=!old;box.replaceChildren();if(!old)return;
+  if(old.status==='running'){old.status='interrupted';old.stop_reason='reload_or_crash'}
+  const info=document.createElement('span');info.textContent='本标签页上次记录 · '+old.participant+' · '+(old.status==='complete'?'已完成':'未完成')+'　';const a=document.createElement('button');a.className='btn alt';a.textContent='导出上次 CSV';a.onclick=()=>download(old);box.append(info,a)}
+function displayResult(s) {
+  view('result');
+  const results = summarize(s);
+  const conflict = results.groups.incongruent;
+  const completed = s.status === 'complete';
+  $('resultHeading').textContent = completed ? '测试完成' : '测试已中止';
+  $('resultMeta').textContent = s.participant ? '被试编号　'+s.participant : '';
+  const report = $('report');
+  const metrics = [
+    ['冲突反应时', format(conflict.rt), '毫秒'],
+    ['冲突正确率', format(conflict.acc), '%'],
+    ['语义干扰量', format(results.rtCost), '毫秒']
+  ].map(([label, value, unit]) => '<div class="metric"><span>'+label+'</span><b>'+value+'</b><small>'+unit+'</small></div>').join('');
+  const rows = Object.entries(results.groups).map(([key, group]) =>
+    '<tr><td>'+labels[key]+'</td><td>'+group.n+'</td><td>'+group.valid+'</td><td>'+format(group.acc,'%')+'</td><td>'+format(group.rt)+'</td></tr>'
+  ).join('');
+  report.innerHTML = '<div class="metrics">'+metrics+'</div><h2>各条件表现</h2>'
+    + '<div class="scroll"><table><thead><tr><th>刺激条件</th><th>题数</th><th>有效反应时数</th><th>正确率</th><th>平均反应时（毫秒）</th></tr></thead><tbody>'+rows+'</tbody></table></div>'
+    + '<p>总体正确率 '+format(results.overall.acc,'%')+'，超时 '+results.overall.timeouts+' 题。</p>'
+    + '<p class="note">冲突指标取自关联不一致题。语义干扰量为关联不一致减中性的平均反应时。横线表示没有可计算的数据。</p>';
+  const status = document.createElement('p');
+  status.className = completed ? 'note' : 'alert';
+  status.textContent = completed ? '已发起 CSV 下载。' : '当前统计仅含已完成的正式题。';
+  report.append(status);
+  if (!cacheOK) report.insertAdjacentHTML('beforeend','<p class="alert">浏览器未提供缓存，请在本页下载 CSV。</p>');
+  const actions = document.createElement('div');
+  actions.className = 'actions';
+  const save = document.createElement('button');
+  save.className = 'btn';
+  save.textContent = '下载 CSV';
+  save.onclick = () => download(s);
+  const back = document.createElement('button');
+  back.className = 'btn alt';
+  back.textContent = '返回登记页';
+  back.onclick = () => { recovery(); view('home'); };
+  actions.append(save,back);
+  report.append(actions);
+}
+
+const parsItems = [
+  {name:'pars3_intensity', title:'1　锻炼时，你通常感觉有多费力？', options:[
+    '很轻松，例如散步或做轻松的广播操。','有一点用力，例如轻松慢跑或打太极拳。',
+    '中等用力，能持续一段时间，例如持续骑车或跑步。',
+    '很费力，呼吸急促、出汗多，每次维持不久，例如短时间激烈打球。',
+    '很费力，呼吸急促、出汗多，并持续较久，例如持续参加激烈比赛。']},
+  {name:'pars3_duration', title:'2　按上题的强度锻炼，每次通常持续多少分钟？', options:[
+    '10 分钟及以下','11–20 分钟','21–30 分钟','31–59 分钟','60 分钟及以上']},
+  {name:'pars3_frequency', title:'3　过去一个月，你按上述强度锻炼的频率大约是多少？', options:[
+    '每月 1 次或更少','每月 2–3 次','每周 1–2 次','每周 3–5 次','几乎每天（约每周 6–7 次）']}
+];
+const fitnessItems = [
+  ['ifis_overall','整体身体适能'], ['ifis_cardiorespiratory','心肺耐力（例如持续跑步的能力）'],
+  ['ifis_strength','肌肉力量'], ['ifis_speed_agility','速度与灵敏性'], ['ifis_flexibility','柔韧性']
+];
+const fitnessLevels = ['很差','较差','一般','较好','很好'];
+
+function answerChoice(name, index, text, accessibleLabel) {
+  const label = document.createElement('label');
+  const radio = document.createElement('input');
+  radio.type = 'radio';
+  radio.name = name;
+  radio.value = String(index+1);
+  radio.required = true;
+  if (accessibleLabel) radio.setAttribute('aria-label', accessibleLabel);
+  label.append(radio, text);
+  return label;
+}
+for (const item of parsItems) {
+  const fieldset = document.createElement('fieldset');
+  const legend = document.createElement('legend');
+  legend.textContent = item.title;
+  const choices = document.createElement('div');
+  choices.className = item.name === 'pars3_intensity' ? 'choices stack' : 'choices';
+  item.options.forEach((text,index) => choices.append(answerChoice(item.name,index,text)));
+  fieldset.append(legend,choices);
+  $('parsQuestions').append(fieldset);
+}
+for (const [name,title] of fitnessItems) {
+  const row = $('fitnessRows').insertRow();
+  const heading = document.createElement('th');
+  heading.scope = 'row';
+  heading.textContent = title;
+  row.append(heading);
+  fitnessLevels.forEach((level,index) => row.insertCell().append(answerChoice(name,index,'',title+'：'+level)));
+}
+
+let lastParticipant = null;
+let surveyContext = null;
+let lastSurvey = null;
+function registration() {
+  lastParticipant = $('pid').value;
+  return {
+    participant: lastParticipant, sex: $('settings').elements.sex.value, age: $('age').valueAsNumber || '',
+    post_exercise: Number($('postExercise').checked)
+  };
+}
+function updateExerciseQuestions() {
+  const skip = $('noExercise').checked;
+  $('parsQuestions').hidden = skip;
+  for (const questions of $('parsQuestions').querySelectorAll('fieldset')) questions.disabled = skip;
+}
+function clearSurveyReceipt() {
+  $('savedNote').textContent = '';
+  $('saveSurvey').textContent = '保存问卷 CSV';
+  lastSurvey = null;
+}
+function clearSurvey() {
+  $('surveyForm').reset();
+  clearSurveyReceipt();
+  updateExerciseQuestions();
+  surveyContext = null;
+}
+$('pid').addEventListener('input', () => {
+  if (lastParticipant === null || $('pid').value === lastParticipant) return;
+  $('settings').querySelectorAll('[name="sex"]').forEach(radio => {radio.checked = false;});
+  $('age').value = '';
+  $('postExercise').checked = false;
+  lastParticipant = null;
+  clearSurvey();
+});
+$('noExercise').addEventListener('change',updateExerciseQuestions);
+$('surveyForm').addEventListener('change',clearSurveyReceipt);
+$('openSurvey').addEventListener('click', () => {
+  if (!$('pid').reportValidity()) return;
+  if ($('age').value && !$('age').reportValidity()) return;
+  const context = registration();
+  if (!surveyContext || context.participant !== surveyContext.participant || context.post_exercise !== surveyContext.post_exercise) {
+    clearSurvey();
+  } else if (context.sex !== surveyContext.sex || context.age !== surveyContext.age) {
+    clearSurveyReceipt();
+  }
+  surveyContext = context;
+  view('survey');
+});
+$('surveyBack').addEventListener('click', () => {view('home');});
+$('surveyForm').addEventListener('submit', event => {
+  event.preventDefault();
+  if (!lastSurvey) {
+    const form = $('surveyForm').elements;
+    const skip = $('noExercise').checked;
+    const answers = {pars3_no_exercise:Number(skip)};
+    for (const {name} of parsItems) answers[name] = skip ? '' : Number(form[name].value);
+    answers.pars3_total = skip ? 0 : answers.pars3_intensity * (answers.pars3_duration-1) * answers.pars3_frequency;
+    for (const [name] of fitnessItems) answers[name] = Number(form[name].value);
+    lastSurvey = {...surveyContext, run_id:Date.now().toString(36)+'-'+randomSeed().toString(36), saved_utc:stamp(), ...answers};
+  }
+  saveCsv(csvText([lastSurvey]), '问卷', lastSurvey);
+  $('savedNote').textContent = '已发起问卷 CSV 下载。';
+  $('saveSurvey').textContent = '再次下载 CSV';
+});
+
+recovery();
+</script></body></html>
