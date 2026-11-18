@@ -17,6 +17,7 @@
   @media(max-width:700px){.sheet{padding:28px 18px}.layout{grid-template-columns:1fr;gap:21px;padding:20px 0}.keys{margin:12px 0}.key{padding:8px 10px}.key strong{font-size:24px}.key span,.key small{display:inline-block;margin-right:7px}.mast{padding-bottom:15px}.metrics{gap:8px}.metric small{display:block;margin:0}th,td{font-size:12px}.pair{gap:14px}}
   .options{display:flex;align-items:center;gap:12px 22px;flex-wrap:wrap;border-top:1px solid var(--thin);padding:15px 0;margin-top:17px}.options .check{border:0;margin:0;padding:0}.exerciseFlag{display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:15px}.exerciseFlag input{appearance:none;display:grid;place-items:center;width:18px;height:18px;margin:0;border:1px solid #777;border-radius:3px;background:#fafafa}.exerciseFlag input:checked{background:#282828;border-color:#282828}.exerciseFlag input:checked::after{content:"";height:9px;width:4px;transform:translateY(-1px) rotate(45deg);border:solid white;border-width:0 2px 2px 0}.entries{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .survey{max-width:780px;margin:auto}.survey .title{font-size:clamp(28px,4vw,43px)}.survey h2{font-size:21px;margin:26px 0 8px}.survey .check{border:0;padding:0;margin:10px 0}.survey fieldset{margin:16px 0}.survey legend{font-size:16px;font-weight:600;padding:0 0 7px}.choices{display:flex;flex-wrap:wrap;gap:6px 15px}.choices.stack{display:grid;gap:4px}.choices label{display:flex;gap:8px;align-items:baseline;cursor:pointer}.survey input[type=radio]{margin:0;width:16px;height:16px;flex:none;align-self:center}.fitness{table-layout:fixed}.fitness th,.fitness td{text-align:center;white-space:normal;line-height:1.45;padding:8px 2px}.fitness th:first-child{width:36%;text-align:left}.fitness tbody th{font-weight:500}.fitness td label{display:grid;min-height:32px;place-items:center;cursor:pointer}.survey .actions{align-items:center;margin-top:20px}.survey .note{margin:4px 0 10px}.survey #savedNote{overflow-wrap:anywhere;margin-top:12px}
+  .registerHead,.savedRow{display:flex;align-items:baseline;justify-content:space-between;gap:12px}.nextPerson{border:0;background:none;color:var(--quiet);cursor:pointer;text-decoration:underline;text-underline-offset:3px;font-size:14px}.savedRow{border-bottom:1px solid var(--thin);padding:6px 0}.savedRow button{flex:none}.restore summary{cursor:pointer;width:fit-content}
 </style>
 </head>
 <body>
@@ -35,7 +36,7 @@
         <p class="note">优先使用数字小键盘，也可以使用主键盘上方的数字键。正式测试共 108 题。</p>
       </section>
       <form id="settings">
-        <h2>测试登记</h2>
+        <div class="registerHead"><h2>测试登记</h2><button class="nextPerson" id="nextPerson" type="button">下一位被试</button></div>
         <label class="field">被试编号<input id="pid" type="text" required autocomplete="off" spellcheck="false"></label>
         <div class="pair">
           <fieldset><legend>性别</legend><div class="radios"><label><input type="radio" name="sex" value="male" required>男</label><label><input type="radio" name="sex" value="female">女</label></div></fieldset>
@@ -48,7 +49,7 @@
         <div class="entries"><button class="btn" type="submit" id="go">开始测试</button><button class="btn alt" type="button" id="openSurvey">填写问卷</button></div>
       </form>
     </div>
-    <div id="recovery" class="restore" hidden></div>
+    <details id="recovery" class="restore" hidden><summary>补下载本编号的记录</summary><div id="recordList"></div></details>
   </section>
   <section id="survey" class="survey" hidden>
     <header class="mast"><h1 class="title">体育活动与自评体适能问卷</h1></header>
@@ -68,6 +69,7 @@
     <header class="mast"><h1 id="resultHeading" class="title"></h1><p class="idline" id="resultMeta"></p></header>
     <div id="report" class="report"></div>
   </section>
+  <p id="storageNotice" class="note" role="status" hidden>浏览器未能保存本地备份。请在离开页面前下载 CSV。</p>
 </main>
 <div id="stage" hidden><div id="fix" class="dot" hidden>•</div><div id="target" class="target" hidden><span id="glyph"></span></div><div id="stageMsg" class="stageMessage" hidden></div></div>
 <script>
@@ -78,6 +80,7 @@ const associate = ['草','金','天'], neutral = ['贯','奖','炭'];
 const labels = {incongruent:'关联不一致',neutral:'中性词',congruent:'关联一致',practice:'练习'};
 
 const cacheKey = 'zh-semantic-stroop.last.v1';
+const version = 'CN-SemStroop-1.4';
 let run = null, receiver = null, generation = 0, live = false, monoZero = 0;
 let timerId = 0, frameId = 0, cacheOK = true;
 function stamp(){return new Date().toISOString()}
@@ -93,7 +96,7 @@ function formalList(seed){const random=rng(seed),list=[];for(let b=1;b<=4;b++){c
   neutral.forEach(word=>C.forEach((color,j)=>block.push({block:b,kind:'neutral',word,association:'',color,key:j+1})));
   list.push(...shuffled(block,random))}return list}
 function practiceList(seed){const items=[];for(let k=0;k<3;k++)C.forEach((color,j)=>items.push({block:0,kind:'practice',word:'%',association:'',color,key:j+1}));return shuffled(items,rng(seed^0x12ab))}
-function storeRun(){if(!run)return;try{sessionStorage.setItem(cacheKey,JSON.stringify(run))}catch{cacheOK=false}}
+function storeRun(){if(run)remember('task',run.run_id,run,run.status!=='running')}
 function later(ms,fn){const id=generation;timerId=setTimeout(()=>{if(live&&generation===id)fn()},ms)}
 function frame(fn){const id=generation;frameId=requestAnimationFrame(()=>{if(live&&generation===id)fn()})}
 function clearTimers(){generation++;clearTimeout(timerId);cancelAnimationFrame(frameId);receiver=null}
@@ -101,17 +104,19 @@ function clearStage(){for(const x of ['fix','target','stageMsg'])$(x).hidden=tru
 function message(line,detail=''){clearStage();const box=$('stageMsg');box.replaceChildren(document.createTextNode(line));if(detail){const small=document.createElement('small');small.textContent=detail;box.append(small)}box.hidden=false}
 function start() {
   if (live) return;
+  checkIdentifier();if(!$('settings').reportValidity())return;
   clearTimers();
   monoZero = performance.now();
   cacheOK = true;
   const seed = randomSeed();
   run = {
-    version: 'CN-SemStroop-1.3', run_id: Date.now().toString(36)+'-'+seed.toString(36), seed,
+    version, run_id: Date.now().toString(36)+'-'+seed.toString(36), seed,
     ...registration(),
     practice_included: Number($('practiceOpt').checked), started_utc: stamp(), ended_utc: '',
     status: 'running', stop_reason: '', phase: 'setup', formal_start_ms: '', formal_end_ms: '',
     last_checkpoint_utc: stamp(), platform: navigator.userAgent, screen_px: screen.width+'x'+screen.height, rows: []
   };
+  saveRegistration('home');
   live = true;
   if (run.practice_included) beginPhase('practice', practiceList(seed));
   else beginPhase('formal', formalList(seed));
@@ -121,7 +126,7 @@ $('settings').addEventListener('submit', e => { e.preventDefault(); start(); });
 function beginPhase(phase,list){view('stage');run.phase=phase;storeRun();
   message(phase==='formal'?'正式测试即将开始':'按键练习即将开始','1 绿　　2 黄　　3 蓝');
   later(1500,()=>{if(phase==='formal')run.formal_start_ms=elapsed();trial(phase,list,0)})}
-function trial(phase,list,index){if(index===list.length){if(phase==='formal'){run.formal_end_ms=elapsed();finish('complete','')}else beginPhase('formal',formalList(run.seed));return}
+function trial(phase,list,index){if(index===list.length){beginPhase('formal',formalList(run.seed));return}
   const t=list[index];const showFix=()=>frame(()=>{clearStage();$('fix').hidden=false;
     later(500,()=>{clearStage();later(300,()=>frame(()=>showStimulus(phase,list,index,t)))})});
   if(phase==='formal'&&index>0&&list[index-1].block!==t.block){message('短暂休息','即将开始第 '+t.block+' / 4 组');later(3000,showFix)}else showFix()}
@@ -132,14 +137,21 @@ function showStimulus(phase,list,index,t){const box=$('target');$('glyph').textC
     const correct=key===t.key,valid=correct&&rt>=200&&rt<=1500;
     const row={phase,trial:index+1,block:t.block,stimulus_type:t.kind,character:t.word,associated_color:t.association,target_color:t.color,correct_key:t.key,response_key:key??'',physical_key:code,correct:correct?1:0,timeout:key===null?1:0,rt_ms:rt===null?'':round(rt),rt_included:valid&&phase==='formal'?1:0,stimulus_onset_ms:round(onset-monoZero),response_handled_ms:round(duration)};
     clearStage();if(phase==='practice')message(key===null?'超时':correct?'正确':'按键有误','色框为'+t.color+'，对应 '+t.key+' 键');
-    run.rows.push(row);run.last_checkpoint_utc=stamp();storeRun();later(1000,()=>trial(phase,list,index+1))};
+    run.rows.push(row);run.last_checkpoint_utc=stamp();
+    if(phase==='formal' && index===list.length-1){
+      run.formal_end_ms=elapsed();finish('complete','');return;
+    }
+    storeRun();later(1000,()=>trial(phase,list,index+1))};
   receiver=(key,code,ts)=>{if(ts>=onset)respond(key,code,ts)};later(3000,()=>respond(null,'',0))}
 document.addEventListener('keydown',e=>{if(!live||e.repeat)return;if(e.code==='Escape'){e.preventDefault();finish('interrupted','escape');return}
   if(!receiver||e.ctrlKey||e.altKey||e.metaKey||e.shiftKey)return;const match=/^(?:Digit|Numpad)([123])$/.exec(e.code);if(match){e.preventDefault();const now=performance.now();const ts=e.timeStamp>=0&&e.timeStamp<=now+1?e.timeStamp:now;receiver(Number(match[1]),e.code,ts)}});
 
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&live)finish('interrupted','tab_hidden')});
 window.addEventListener('blur',()=>{if(live&&run.phase==='formal')finish('interrupted','window_blur')});
-window.addEventListener('pagehide',()=>{if(live){clearTimers();live=false;run.status='interrupted';run.stop_reason='page_exit';run.ended_utc=stamp();storeRun()}});
+window.addEventListener('pagehide',()=>{if(live)finish('interrupted','page_exit')});
+window.addEventListener('pageshow',event=>{
+  if(event.persisted && run && !live && !$('stage').hidden)displayResult(run);
+});
 function stats(rows){const n=rows.length,correct=rows.filter(r=>r.correct).length,valid=rows.filter(r=>r.rt_included);
   const mean=valid.length?valid.reduce((s,r)=>s+r.rt_ms,0)/valid.length:null;
   return {n,correct,acc:n?100*correct/n:null,rt:mean,valid:valid.length,timeouts:rows.filter(r=>r.timeout).length}}
@@ -147,9 +159,10 @@ function summarize(session){const all=session.rows.filter(r=>r.phase==='formal')
   const a=groups.incongruent,b=groups.neutral;return {groups,overall:stats(all),rtCost:a.rt===null||b.rt===null?null:a.rt-b.rt,accCost:a.acc===null||b.acc===null?null:b.acc-a.acc}}
 function scalar(n){return n===null?'':round(n)}
 function csvText(data) {
-  const cols = [...new Set(data.flatMap(Object.keys))];
+  // CSV has no text column type. A fixed textual key also survives Excel's automatic conversions.
+  const cols = ['participant_key',...new Set(data.flatMap(Object.keys))];
   const escapeCell = value => '"'+String(value ?? '').replaceAll('"','""')+'"';
-  return '\ufeff'+[cols,...data.map(row=>cols.map(k=>row[k]))].map(line=>line.map(escapeCell).join(',')).join('\r\n')+'\r\n';
+  return '\ufeff'+[cols,...data.map(row=>cols.map(k=>k==='participant_key'?'ID:'+row.participant:row[k]))].map(line=>line.map(escapeCell).join(',')).join('\r\n')+'\r\n';
 }
 function buildCSV(s){const {rows,...meta}=s;const metrics=summarize(s);const summary={};for(const [group,val] of Object.entries({all:metrics.overall,...metrics.groups})){for(const [field,v] of Object.entries(val))summary[group+'_'+field]=scalar(v)}
   summary.semantic_cost_ms=scalar(metrics.rtCost);summary.accuracy_cost_pp=scalar(metrics.accCost);
@@ -170,13 +183,21 @@ function fileIdentifier(value) {
   for (const byte of encoder.encode(value)) hash = Math.imul(hash ^ byte, 16777619);
   return prefix+'~'+(hash >>> 0).toString(16).padStart(8,'0');
 }
+const exportSession = Array.from(crypto.getRandomValues(new Uint32Array(2)),v=>v.toString(36)).join('-');
+let exportNumber = 0;
+function localTimestamp(date) {
+  const pad = (n,width=2) => String(n).padStart(width,'0');
+  return date.getFullYear()+pad(date.getMonth()+1)+pad(date.getDate())+'-'+
+    pad(date.getHours())+pad(date.getMinutes())+pad(date.getSeconds())+'-'+pad(date.getMilliseconds(),3);
+}
 function saveCsv(text, category, record) {
   const blob = new Blob([text], {type:'text/csv;charset=utf-8;'});
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
   link.download = [category, fileIdentifier(record.participant), record.post_exercise === 1 ? '运动后' : '',
-    record.run_id, record.status === 'interrupted' ? '中止' : ''].filter(Boolean).join('_')+'.csv';
+    record.status === 'interrupted' ? '中止' : '', localTimestamp(new Date()), record.run_id,
+    exportSession+'-'+(++exportNumber).toString(36)].filter(Boolean).join('_')+'.csv';
   document.body.append(link);
   link.click();
   link.remove();
@@ -185,9 +206,114 @@ function saveCsv(text, category, record) {
 function download(s) { saveCsv(buildCSV(s), 'Stroop', s); }
 function finish(status,reason){if(!live)return;live=false;clearTimers();run.status=status;run.stop_reason=reason;run.ended_utc=stamp();storeRun();displayResult(run);if(status==='complete')download(run)}
 function format(n,unit=''){return n===null?'—':n.toFixed(1)+unit}
-function recovery(){let old;try{old=JSON.parse(sessionStorage.getItem(cacheKey))}catch{}const box=$('recovery');box.hidden=!old;box.replaceChildren();if(!old)return;
-  if(old.status==='running'){old.status='interrupted';old.stop_reason='reload_or_crash'}
-  const info=document.createElement('span');info.textContent='本标签页上次记录 · '+old.participant+' · '+(old.status==='complete'?'已完成':'未完成')+'　';const a=document.createElement('button');a.className='btn alt';a.textContent='导出上次 CSV';a.onclick=()=>download(old);box.append(info,a)}
+const prefix = 'cn-stroop.v14/';
+const pendingRecords = new Map();
+const archive = new Promise(resolve => {
+  try {
+    const open = indexedDB.open('cn-stroop-records',1);
+    open.onupgradeneeded = () => open.result.createObjectStore('records',{keyPath:'key'}).createIndex('participant','participant');
+    open.onsuccess = () => {const db=open.result;db.onversionchange=()=>db.close();resolve(db);};
+    open.onerror = open.onblocked = () => resolve(null);
+  } catch {resolve(null);}
+});
+function participantPrefix(id) {return prefix+JSON.stringify(id)+'/';}
+function storageWarning() {cacheOK=false;$('storageNotice').hidden=false;}
+async function remember(kind, identifier, data, archiveNow=true) {
+  const key=participantPrefix(data.participant)+kind+'/'+identifier;
+  const record={key,kind,participant:data.participant,data};
+  pendingRecords.set(key,record);
+  const encoded=JSON.stringify(record);
+  let journaled=false,previousJournal=null;
+  try {localStorage.setItem(key,encoded);journaled=true;} catch {
+    try {previousJournal=localStorage.getItem(key);} catch {}
+  }
+  // A synchronous journal survives pagehide. Finished records move to the larger indexed archive.
+  if (!archiveNow && journaled) {pendingRecords.delete(key);return true;}
+  let committed=false;
+  try {
+    const db=await archive;
+    if(db) committed=await new Promise(resolve=>{
+      const tx=db.transaction('records','readwrite');
+      tx.objectStore('records').put(JSON.parse(encoded));
+      tx.oncomplete=()=>resolve(true);
+      tx.onabort=tx.onerror=()=>resolve(false);
+    });
+  } catch {}
+  if(committed) {
+    if(pendingRecords.get(key)===record)pendingRecords.delete(key);
+    try {
+      const current=localStorage.getItem(key);
+      if(current!==null && current===(journaled?encoded:previousJournal))localStorage.removeItem(key);
+    } catch {}
+  } else if(!journaled) storageWarning();
+  return committed || journaled;
+}
+async function recordsFor(id) {
+  const found=new Map();
+  const p=participantPrefix(id);
+  try {
+    const db=await archive;
+    if(db) {
+      const archived=await new Promise((resolve,reject)=>{
+        const request=db.transaction('records').objectStore('records').index('participant').getAll(id);
+        request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+      });
+      for(const item of archived)found.set(item.key,item);
+    }
+  } catch {}
+  try {
+    for(let i=0;i<localStorage.length;i++){
+      const key=localStorage.key(i);
+      if(key && key.startsWith(p)){
+        const item=JSON.parse(localStorage.getItem(key));
+        if(item && item.participant===id)found.set(key,item);
+      }
+    }
+  } catch {}
+  for(const [key,item] of pendingRecords)if(item.participant===id)found.set(key,item);
+  return [...found.values()];
+}
+function recoveredTask(data) {
+  if(data.status==='complete')return data;
+  const formal=data.rows.filter(r=>r.phase==='formal');
+  if(formal.length===108) {
+    const last=formal[107];
+    return {...data,status:'complete',stop_reason:'',ended_utc:data.ended_utc || data.last_checkpoint_utc,
+      formal_end_ms:data.formal_end_ms || round(last.stimulus_onset_ms+last.response_handled_ms)};
+  }
+  if(data.status==='running')return {...data,status:'interrupted',stop_reason:'recovered_checkpoint',ended_utc:data.last_checkpoint_utc};
+  return data;
+}
+async function migrateOldTask() {
+  try {
+    const original=sessionStorage.getItem(cacheKey);if(!original)return;
+    const record=JSON.parse(original);
+    if(typeof record.participant==='string' && record.run_id && Array.isArray(record.rows) &&
+       await remember('task',record.run_id,recoveredTask(record)) && sessionStorage.getItem(cacheKey)===original) sessionStorage.removeItem(cacheKey);
+  } catch {}
+}
+let lookupNumber=0;
+async function recovery() {
+  const id=$('pid').value,lookup=++lookupNumber,box=$('recovery'),list=$('recordList');
+  list.replaceChildren();box.hidden=true;box.open=false;
+  if(!id.trim())return;
+  const found=(await recordsFor(id)).filter(r=>r.kind!=='draft');
+  if(lookup!==lookupNumber || $('pid').value!==id)return;
+  const time=r=>r.data.saved_utc||r.data.started_utc||'';
+  found.sort((a,b)=>time(b).localeCompare(time(a)));
+  for(const record of found) {
+    const task=record.kind==='task',data=task?recoveredTask(record.data):record.data;
+    const when=new Date(time(record)).toLocaleString('zh-CN',{hour12:false});
+    const line=document.createElement('div');line.className='savedRow';
+    const label=document.createElement('span');
+    label.textContent=[id,task?'键盘测试':'问卷',data.post_exercise?'运动后':'',when,
+      task?(data.status==='complete'?'已完成':'未完成'):'已保存'].filter(Boolean).join(' · ');
+    const button=document.createElement('button');button.type='button';button.className='btn alt';button.textContent='下载 CSV';
+    button.onclick=()=>{if($('pid').value===id){if(task)download(data);else saveCsv(csvText([data]),'问卷',data);}};
+    line.append(label,button);list.append(line);
+  }
+  box.hidden=!found.length;
+}
 function displayResult(s) {
   view('result');
   const results = summarize(s);
@@ -274,15 +400,31 @@ for (const [name,title] of fitnessItems) {
   fitnessLevels.forEach((level,index) => row.insertCell().append(answerChoice(name,index,'',title+'：'+level)));
 }
 
-let lastParticipant = null;
 let surveyContext = null;
 let lastSurvey = null;
 function registration() {
-  lastParticipant = $('pid').value;
   return {
-    participant: lastParticipant, sex: $('settings').elements.sex.value, age: $('age').valueAsNumber || '',
+    participant: $('pid').value, sex: $('settings').elements.sex.value, age: $('age').valueAsNumber || '',
     post_exercise: Number($('postExercise').checked)
   };
+}
+const deskKey=prefix+'registration';
+function saveRegistration(screen) {
+  try {sessionStorage.setItem(deskKey,JSON.stringify({...registration(),practice:$('practiceOpt').checked,screen}));} catch {}
+}
+function restoreRegistration() {
+  let saved;
+  try {saved=JSON.parse(sessionStorage.getItem(deskKey));} catch {}
+  if(!saved || typeof saved.participant!=='string')return 'home';
+  $('pid').value=saved.participant;
+  $('settings').elements.sex.value=saved.sex || '';
+  $('age').value=saved.age || '';
+  $('postExercise').checked=saved.post_exercise===1;
+  $('practiceOpt').checked=!!saved.practice;
+  return saved.screen;
+}
+function checkIdentifier() {
+  $('pid').setCustomValidity($('pid').value && !$('pid').value.trim()?'请输入包含非空白字符的被试编号。':'');
 }
 function updateExerciseQuestions() {
   const skip = $('noExercise').checked;
@@ -294,35 +436,55 @@ function clearSurveyReceipt() {
   $('saveSurvey').textContent = '保存问卷 CSV';
   lastSurvey = null;
 }
-function clearSurvey() {
-  $('surveyForm').reset();
-  clearSurveyReceipt();
-  updateExerciseQuestions();
-  surveyContext = null;
+const surveyNames=[...parsItems.map(i=>i.name),...fitnessItems.map(i=>i[0])];
+function saveDraft() {
+  if(!surveyContext)return;
+  const values={};
+  for(const name of surveyNames)values[name]=$('surveyForm').elements[name].value;
+  remember('draft',String(surveyContext.post_exercise),{...surveyContext,values,skip:$('noExercise').checked,
+    updated_utc:stamp(),saved:lastSurvey},false);
 }
-$('pid').addEventListener('input', () => {
-  if (lastParticipant === null || $('pid').value === lastParticipant) return;
-  $('settings').querySelectorAll('[name="sex"]').forEach(radio => {radio.checked = false;});
-  $('age').value = '';
-  $('postExercise').checked = false;
-  lastParticipant = null;
-  clearSurvey();
-});
-$('noExercise').addEventListener('change',updateExerciseQuestions);
-$('surveyForm').addEventListener('change',clearSurveyReceipt);
-$('openSurvey').addEventListener('click', () => {
-  if (!$('pid').reportValidity()) return;
-  if ($('age').value && !$('age').reportValidity()) return;
-  const context = registration();
-  if (!surveyContext || context.participant !== surveyContext.participant || context.post_exercise !== surveyContext.post_exercise) {
-    clearSurvey();
-  } else if (context.sex !== surveyContext.sex || context.age !== surveyContext.age) {
-    clearSurveyReceipt();
+function applyDraft(draft,context) {
+  $('surveyForm').reset();clearSurveyReceipt();surveyContext=context;
+  if(draft) {
+    $('noExercise').checked=!!draft.skip;
+    for(const name of surveyNames)$('surveyForm').elements[name].value=draft.values[name]||'';
+    const old=draft.saved;
+    if(old && old.participant===context.participant && old.post_exercise===context.post_exercise &&
+       old.sex===context.sex && old.age===context.age) {
+      lastSurvey=old;$('saveSurvey').textContent='再次下载 CSV';
+      $('savedNote').textContent='已恢复这份已保存的问卷。';
+    } else if(draft.post_exercise!==context.post_exercise) {
+      $('savedNote').textContent='已带入同一编号的答案，请核对后保存。';
+    }
   }
-  surveyContext = context;
-  view('survey');
+  updateExerciseQuestions();
+}
+let surveyOpenRequest=0;
+$('settings').addEventListener('input',e=>{
+  ++surveyOpenRequest;
+  if(e.target===$('pid')) {checkIdentifier();recovery();}
+  saveRegistration('home');
 });
-$('surveyBack').addEventListener('click', () => {view('home');});
+$('nextPerson').onclick=()=>{
+  ++surveyOpenRequest;
+  $('settings').reset();$('surveyForm').reset();surveyContext=null;clearSurveyReceipt();
+  checkIdentifier();saveRegistration('home');recovery();$('pid').focus();
+};
+$('noExercise').addEventListener('change',updateExerciseQuestions);
+$('surveyForm').addEventListener('change',()=>{clearSurveyReceipt();saveDraft();});
+async function openSurvey() {
+  checkIdentifier();
+  if(!$('settings').reportValidity())return;
+  const context=registration(),request=++surveyOpenRequest;
+  const found=await recordsFor(context.participant);
+  if(request!==surveyOpenRequest || live || $('home').hidden)return;
+  const drafts=found.filter(r=>r.kind==='draft').map(r=>r.data);
+  const draft=drafts.find(d=>d.post_exercise===context.post_exercise) || drafts[0];
+  applyDraft(draft,context);saveRegistration('survey');view('survey');
+}
+$('openSurvey').addEventListener('click',openSurvey);
+$('surveyBack').addEventListener('click', () => {saveDraft();saveRegistration('home');view('home');recovery();});
 $('surveyForm').addEventListener('submit', event => {
   event.preventDefault();
   if (!lastSurvey) {
@@ -332,12 +494,16 @@ $('surveyForm').addEventListener('submit', event => {
     for (const {name} of parsItems) answers[name] = skip ? '' : Number(form[name].value);
     answers.pars3_total = skip ? 0 : answers.pars3_intensity * (answers.pars3_duration-1) * answers.pars3_frequency;
     for (const [name] of fitnessItems) answers[name] = Number(form[name].value);
-    lastSurvey = {...surveyContext, run_id:Date.now().toString(36)+'-'+randomSeed().toString(36), saved_utc:stamp(), ...answers};
+    lastSurvey = {...surveyContext, version,run_id:Date.now().toString(36)+'-'+randomSeed().toString(36), saved_utc:stamp(), ...answers};
   }
+  remember('survey',lastSurvey.run_id,lastSurvey);saveDraft();
   saveCsv(csvText([lastSurvey]), '问卷', lastSurvey);
   $('savedNote').textContent = '已发起问卷 CSV 下载。';
   $('saveSurvey').textContent = '再次下载 CSV';
 });
 
-recovery();
+const previousScreen=restoreRegistration();
+checkIdentifier();
+migrateOldTask().then(recovery);
+if(previousScreen==='survey')openSurvey();
 </script></body></html>
