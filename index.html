@@ -58,6 +58,7 @@
   <section id="survey" class="survey" hidden>
     <header class="mast"><h1 class="title">体育活动与自评体适能问卷</h1></header>
     <form id="surveyForm">
+      <fieldset id="surveyAnswers" aria-label="问卷题目" style="margin:0;min-width:0">
       <h2>过去一个月的体育锻炼</h2>
       <p class="note">按你最常做的那类体育锻炼回答，每题选一项。</p>
       <label class="check"><input type="checkbox" id="noExercise">过去一个月完全没有锻炼</label>
@@ -65,6 +66,7 @@
       <h2>目前的身体适能</h2>
       <p>和同龄人相比，你觉得自己在以下各方面表现怎样？</p>
       <table class="fitness" aria-label="目前的身体适能"><thead><tr><th scope="col">项目</th><th scope="col">很差</th><th scope="col">较差</th><th scope="col">一般</th><th scope="col">较好</th><th scope="col">很好</th></tr></thead><tbody id="fitnessRows"></tbody></table>
+      </fieldset>
       <div class="actions"><button type="submit" class="btn" id="saveSurvey">保存问卷 CSV</button><button type="button" class="btn alt" id="surveyBack">返回首页</button></div>
       <p id="savedNote" class="note" role="status"></p>
     </form>
@@ -84,7 +86,7 @@ const associate = ['草','金','天'], neutral = ['贯','奖','炭'];
 const labels = {incongruent:'关联不一致',neutral:'中性词',congruent:'关联一致',practice:'练习'};
 
 const cacheKey = 'zh-semantic-stroop.last.v1';
-const version = 'CN-SemStroop-1.5';
+const version = 'CN-SemStroop-1.6';
 let run = null, receiver = null, generation = 0, live = false, monoZero = 0;
 let timerId = 0, frameId = 0;
 function stamp(){return new Date().toISOString()}
@@ -263,29 +265,48 @@ function writeTransaction(db) {
   catch {return db.transaction('records','readwrite');}
 }
 const folderKey=prefix+'backup-folder';
-let backupFolder=null;
-const folderReady=(async()=>{
+let sessionFolder=null,folderRevision=0;
+async function currentFolder(){
+  if(sessionFolder)return sessionFolder;
+  const db=await archive;
+  if(!db)return null;
+  return new Promise((resolve,reject)=>{
+    const read=db.transaction('records').objectStore('records').get(folderKey);
+    read.onsuccess=()=>resolve(read.result?.handle || null);read.onerror=()=>reject(read.error);
+  });
+}
+async function refreshFolder(){
   if(typeof window.showDirectoryPicker!=='function')return;
+  const revision=++folderRevision;
   try {
-    const db=await archive;
-    if(db)backupFolder=await new Promise((resolve,reject)=>{
-      const read=db.transaction('records').objectStore('records').get(folderKey);
-      read.onsuccess=()=>resolve(read.result?.handle || null);read.onerror=()=>reject(read.error);
-    });
-    if(backupFolder){
-      const granted=await backupFolder.queryPermission({mode:'readwrite'})==='granted';
-      $('folderNote').textContent=granted?'自动备份文件夹：'+backupFolder.name:'请重新选择「'+backupFolder.name+'」以恢复文件夹写入权限。';
+    const folder=await currentFolder();
+    if(folder){
+      const granted=await folder.queryPermission({mode:'readwrite'})==='granted';
+      if(revision===folderRevision)$('folderNote').textContent=granted?'自动备份文件夹：'+folder.name+(sessionFolder?'（仅本次打开期间有效）':''):'请重新选择「'+folder.name+'」以恢复文件夹写入权限。';
     }
   } catch {}
   $('folderSettings').hidden=false;
-})();
+}
+const folderReady=refreshFolder();
+let folderChannel;
+try {
+  folderChannel=new BroadcastChannel(folderKey);
+  folderChannel.onmessage=event=>{
+    if(event.data?.request){
+      if(sessionFolder)try{folderChannel.postMessage({handle:sessionFolder});}catch{}
+      return;
+    }
+    sessionFolder=event.data?.handle || null;refreshFolder();
+  };
+  folderChannel.postMessage({request:true});
+} catch {}
+window.addEventListener('focus',refreshFolder);
 $('chooseFolder').onclick=async()=>{
   const button=$('chooseFolder');button.disabled=true;
   try {
     const folder=await window.showDirectoryPicker({mode:'readwrite',id:'stroop-data'});
     const permission=await folder.requestPermission({mode:'readwrite'});
     if(permission!=='granted')throw new Error('permission');
-    backupFolder=folder;
     const db=await archive;
     let retained=false;
     if(db)try {
@@ -294,23 +315,51 @@ $('chooseFolder').onclick=async()=>{
         tx.oncomplete=()=>resolve(true);tx.onabort=tx.onerror=()=>reject(tx.error);
       });
     } catch {}
+    sessionFolder=retained?null:folder;
+    ++folderRevision;
     $('folderNote').textContent='自动备份文件夹：'+folder.name+(retained?'':'（重新打开网页后需再选一次）');
+    try {folderChannel?.postMessage(retained?{}:{handle:folder});} catch {}
   } catch(error) {
     if(error.name!=='AbortError')$('folderNote').textContent='未能设置这个文件夹，请重新选择。';
   } finally {button.disabled=false;}
 };
 async function writeFolderBackup(filename,text) {
-  await folderReady;
-  const folder=backupFolder;
+  if(typeof window.showDirectoryPicker!=='function')return {selected:false};
+  let folder;
+  try {folder=await currentFolder();} catch {return {unavailable:true};}
   if(!folder)return {selected:false};
+  // A new name for each write also protects existing, manually edited and legacy files.
+  const nonce=Array.from(crypto.getRandomValues(new Uint32Array(4)),v=>v.toString(16).padStart(8,'0')).join('');
+  const name=filename.slice(0,-4)+'_'+nonce+'.csv';
+  const working=name+'.bak';
+  let staged=null,verified=false;
   try {
     if(await folder.queryPermission({mode:'readwrite'})!=='granted')throw new Error('permission');
-    const file=await folder.getFileHandle(filename,{create:true});
-    const stream=await file.createWritable();
+    for(const candidate of [name,working,working+'.ok']){
+      try {await folder.getFileHandle(candidate);throw new Error('backup name already in use');}
+      catch(error){if(error.name!=='NotFoundError')throw error;}
+    }
+    staged=await folder.getFileHandle(working,{create:true});
+    const stream=await staged.createWritable();
     try {await stream.write(text);await stream.close();}
     catch(error){try{await stream.abort();}catch{}throw error;}
+    const actual=new Uint8Array(await (await staged.getFile()).arrayBuffer());
+    const expected=new TextEncoder().encode(text);
+    if(actual.length!==expected.length || !actual.every((value,i)=>value===expected[i]))throw new Error('incomplete');
+    verified=true;
+    try {
+      await staged.move(folder,name);
+    } catch {
+      // On filesystems without atomic rename, the marker publishes the verified copy.
+      // Never open an empty destination with the final .csv extension.
+      await folder.getFileHandle(working+'.ok',{create:true});
+      return {selected:true,saved:true,portable:true,name:folder.name};
+    }
     return {selected:true,saved:true,name:folder.name};
-  } catch {return {selected:true,saved:false,name:folder.name};}
+  } catch {
+    if(staged&&!verified)try{await folder.removeEntry(working);}catch{}
+    return {selected:true,saved:false,name:folder.name};
+  }
 }
 async function backupCsv(category,record,text,sourceSaved) {
   const {participant,run_id,post_exercise,status}=record;
@@ -326,24 +375,15 @@ function backupMessage({csvSaved,source,folder}) {
   const notes=[];
   if(csvSaved)notes.push('完整 CSV 已备份到本机浏览器，可在首页按编号补下载。');
   else if(source)notes.push('本机已保存原始记录，可在首页按编号重新导出 CSV。');
-  if(folder.saved)notes.push('CSV 已写入文件夹「'+folder.name+'」。');
+  if(folder.portable)notes.push('文件夹「'+folder.name+'」已保存校验过的 .csv.bak 副本，同名 .ok 表示写入完成。去掉 .bak 即可打开 CSV。');
+  else if(folder.saved)notes.push('CSV 已写入文件夹「'+folder.name+'」。');
   else if(folder.selected)notes.push('未能写入文件夹「'+folder.name+'」，请手动保存 CSV。');
+  else if(folder.unavailable)notes.push('未能读取备份文件夹设置，请手动保存 CSV。');
   if(!csvSaved && !source && !folder.saved)notes.push('本地备份失败，请立即下载 CSV，确认文件保存后再离开本页。');
   return notes.join(' ');
 }
-async function recordsFor(id) {
-  const found=new Map();
+function localRecordsFor(id,found=new Map()) {
   const p=participantPrefix(id);
-  try {
-    const db=await archive;
-    if(db) {
-      const archived=await new Promise((resolve,reject)=>{
-        const request=db.transaction('records').objectStore('records').index('participant').getAll(id);
-        request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
-      });
-      for(const item of archived)found.set(item.key,item);
-    }
-  } catch {}
   try {
     for(let i=0;i<localStorage.length;i++){
       const key=localStorage.key(i);
@@ -355,6 +395,20 @@ async function recordsFor(id) {
   } catch {}
   for(const [key,item] of pendingRecords)if(item.participant===id)found.set(key,item);
   return [...found.values()];
+}
+async function recordsFor(id) {
+  const found=new Map();
+  try {
+    const db=await archive;
+    if(db) {
+      const archived=await new Promise((resolve,reject)=>{
+        const request=db.transaction('records').objectStore('records').index('participant').getAll(id);
+        request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error);
+      });
+      for(const item of archived)found.set(item.key,item);
+    }
+  } catch {}
+  return localRecordsFor(id,found);
 }
 function recoveredTask(data) {
   if(data.status==='complete')return data;
@@ -380,8 +434,14 @@ async function recovery() {
   const id=$('pid').value,lookup=++lookupNumber,list=$('recordList'),note=$('lookupNote');
   list.replaceChildren();note.textContent=id.trim()?'正在查找本机记录…':'在上方输入原被试编号，即可补下载记录。';
   if(!id.trim())return;
+  const local=localRecordsFor(id).filter(r=>r.kind!=='draft');
+  if(local.length)showRecords(id,local,true);
   const found=(await recordsFor(id)).filter(r=>r.kind!=='draft');
-  if(lookup!==lookupNumber || $('pid').value!==id)return;
+  if(lookup===lookupNumber && $('pid').value===id)showRecords(id,found,false);
+}
+function showRecords(id,found,loading) {
+  const list=$('recordList'),note=$('lookupNote');
+  list.replaceChildren();
   const unique=new Map();
   for(const r of found){
     const kind=r.kind==='csv'?r.data.category:r.kind==='task'?'Stroop':'问卷';
@@ -390,7 +450,7 @@ async function recovery() {
   }
   const time=r=>r.data.ended_utc||r.data.saved_utc||r.data.started_utc||'';
   const records=Array.from(unique.values()).sort((a,b)=>time(b).localeCompare(time(a)));
-  note.textContent=records.length?'请选择要下载的记录。':'本机没有找到这个编号的记录。请核对编号，并使用测试时的浏览器。';
+  note.textContent=loading?'这些记录可立即下载，正在读取其余记录。':records.length?'请选择要下载的记录。':'本机没有找到这个编号的记录。请核对编号，并使用测试时的浏览器。';
   for(const record of records) {
     const exact=record.kind==='csv',task=record.kind==='task'||(exact&&record.data.category==='Stroop');
     const data=record.kind==='task'?recoveredTask(record.data):record.data;
@@ -431,14 +491,15 @@ function displayResult(s,backup=null,autoDownload=false) {
   const status = document.createElement('p');
   status.className = completed ? 'note' : 'alert';
   status.setAttribute('role','status');
-  status.textContent = backup ? '正在保存本地备份…' : '可下载本轮 CSV。';
+  status.textContent = backup ? '正在保存本地备份，也可立即手动下载本轮 CSV。' : '可下载本轮 CSV。';
   report.append(status);
   const actions = document.createElement('div');
   actions.className = 'actions';
   const save = document.createElement('button');
   save.className = 'btn';
   save.textContent = '下载 CSV';
-  save.onclick = () => download(s);
+  let downloaded=false;
+  save.onclick = () => {download(s);downloaded=true;};
   const back = document.createElement('button');
   back.className = 'btn alt';
   back.textContent = '返回登记页';
@@ -446,16 +507,14 @@ function displayResult(s,backup=null,autoDownload=false) {
   actions.append(save,back);
   report.append(actions);
   if(backup){
-    save.disabled=back.disabled=true;
     backup.then(result=>{
-      if(!report.contains(status))return;
+      if(!report.contains(status)||$('result').hidden)return;
       if(result.csvSaved||result.source)$('storageNotice').hidden=true;
       status.textContent=backupMessage(result);
-      save.disabled=back.disabled=false;
-      if(autoDownload && !$('result').hidden)download(s);
+      if(autoDownload && !downloaded)download(s);
     }).catch(()=>{
       if(!report.contains(status))return;
-      status.textContent='未能确认本地备份，请立即下载 CSV 并确认保存。';save.disabled=back.disabled=false;
+      status.textContent='未能确认本地备份，请立即下载 CSV 并确认保存。';
     });
   }
 }
@@ -509,6 +568,8 @@ for (const [name,title] of fitnessItems) {
 
 let surveyContext = null;
 let lastSurvey = null;
+let pendingSurvey = null;
+let backedUpSurvey = null;
 function registration() {
   return {
     participant: $('pid').value, sex: $('settings').elements.sex.value, age: $('age').valueAsNumber || '',
@@ -539,6 +600,9 @@ function updateExerciseQuestions() {
   for (const questions of $('parsQuestions').querySelectorAll('fieldset')) questions.disabled = skip;
 }
 function clearSurveyReceipt() {
+  pendingSurvey=null;
+  backedUpSurvey=null;
+  $('surveyAnswers').disabled=false;
   $('savedNote').textContent = '';
   $('saveSurvey').textContent = '保存问卷 CSV';
   lastSurvey = null;
@@ -591,10 +655,24 @@ async function openSurvey() {
   applyDraft(draft,context);saveRegistration('survey');view('survey');
 }
 $('openSurvey').addEventListener('click',openSurvey);
-$('surveyBack').addEventListener('click', () => {saveDraft();saveRegistration('home');view('home');recovery();});
+$('surveyBack').addEventListener('click', () => {
+  saveDraft();pendingSurvey=null;$('surveyAnswers').disabled=false;
+  saveRegistration('home');view('home');recovery();
+});
 $('surveyForm').addEventListener('submit', async event => {
   event.preventDefault();
-  if($('saveSurvey').disabled)return;
+  if(pendingSurvey){
+    saveCsv(pendingSurvey.text,'问卷',pendingSurvey.record);
+    pendingSurvey.downloaded=true;
+    $('surveyAnswers').disabled=false;
+    $('saveSurvey').textContent='再次下载 CSV';
+    $('savedNote').textContent='已发起本次答案的 CSV 下载，本地备份仍在进行。';
+    return;
+  }
+  if(lastSurvey && lastSurvey===backedUpSurvey){
+    saveCsv(csvText([lastSurvey]),'问卷',lastSurvey);
+    return;
+  }
   if (!lastSurvey) {
     const form = $('surveyForm').elements;
     const skip = $('noExercise').checked;
@@ -606,22 +684,29 @@ $('surveyForm').addEventListener('submit', async event => {
   }
   const submitted=lastSurvey,text=csvText([submitted]);
   const source=remember('survey',submitted.run_id,submitted);saveDraft();
-  $('saveSurvey').disabled=$('surveyBack').disabled=true;
-  $('savedNote').textContent='正在保存本地备份…';
+  const job={record:submitted,text,downloaded:false};
+  pendingSurvey=job;
+  $('surveyAnswers').disabled=true;
+  $('saveSurvey').textContent='立即下载本次 CSV';
+  $('savedNote').textContent='正在备份已提交的答案，也可立即手动下载。';
   try {
     const result=await backupCsv('问卷',submitted,text,source);
-    if(lastSurvey===submitted && !$('survey').hidden){
+    if(pendingSurvey===job){
       if(result.csvSaved||result.source)$('storageNotice').hidden=true;
       $('savedNote').textContent=backupMessage(result);
-      $('saveSurvey').textContent='再次下载 CSV';
-      saveCsv(text,'问卷',submitted);
+      if(result.folder.saved || ((result.csvSaved||result.source) && !result.folder.selected && !result.folder.unavailable))backedUpSurvey=submitted;
+      if(!job.downloaded)saveCsv(text,'问卷',submitted);
     }
   } catch {
-    if(lastSurvey===submitted && !$('survey').hidden){
+    if(pendingSurvey===job){
       $('savedNote').textContent='未能确认本地备份，请保存本次下载的 CSV。';
-      saveCsv(text,'问卷',submitted);
+      if(!job.downloaded)saveCsv(text,'问卷',submitted);
     }
-  } finally {$('saveSurvey').disabled=$('surveyBack').disabled=false;}
+  } finally {
+    if(pendingSurvey===job){
+      pendingSurvey=null;$('surveyAnswers').disabled=false;$('saveSurvey').textContent='再次下载 CSV';
+    }
+  }
 });
 
 const previousScreen=restoreRegistration();
